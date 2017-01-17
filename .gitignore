@@ -1,0 +1,146 @@
+ar accessToken = "YOURACCESSTOKEN",
+    baseUrl = "https://api.api.ai/v1/",
+    $speechInput,
+    $recBtn,
+    recognition,
+    messageRecording = "Recording...",
+    messageCouldntHear = "I couldn't hear you, could you say that again?",
+    messageInternalError = "Oh no, there has been an internal server error",
+    messageSorry = "I'm sorry, I don't have the answer to that yet.";
+    
+    
+$speechInput.keypress(function(event) {
+  if (event.which == 13) {
+    event.preventDefault();
+    send();
+  }
+});
+
+$recBtn.on("click", function(event) {
+  switchRecognition();
+});
+
+$(".debug__btn").on("click", function() {
+  $(this).next().toggleClass("is-active");
+  return false;
+});
+
+function startRecognition() {
+  recognition = new webkitSpeechRecognition();
+
+  recognition.onstart = function(event) {
+    respond(messageRecording);
+    updateRec();
+  };
+  recognition.onresult = function(event) {
+    recognition.onend = null;
+    
+    var text = "";
+    for (var i = event.resultIndex; i < event.results.length; ++i) {
+      text += event.results[i][0].transcript;
+    }
+    setInput(text);
+    stopRecognition();
+  };
+  recognition.onend = function() {
+    respond(messageCouldntHear);
+    stopRecognition();
+  };
+  recognition.lang = "en-US";
+  recognition.start();
+}
+[/code]
+
+This is what runs the HTML5 Speech Recognition API. It all uses functions within webkitSpeechRecognition(). Here are a few pointers for what is going on:
+
+
+  recognition.onstart - Runs when recording from the user's microphone begins. We use a function called respond() to display our message that tells the user we are listening to them. We will cover the respond() function in more detail soon. updateRec() switches the text for our recording button from "Stop" to "Speak".
+  recognition.onresult - Runs when we have a result from the voice recognition. We parse the result and set our text field to use that result via setInput() (this function just adds the text to the input field and then runs our send() function).
+  recognition.onend - Runs when the voice recognition ends. We set this to null in recognition.onresult to prevent it running if we have a successful result — this way, if recognition.onend runs, we know the voice recognition API has not understood the user. If the function does run, we respond to the user to tell them we did not hear them correctly.
+  recognition.lang - Sets the language we are looking for. In our demo's case, we are looking for US English.
+  recognition.start() - Starts that whole process!
+
+
+Our stopRecognition() function is much simpler. It stops our recognition and sets it to null. Then, it updates the button to show that we are not recording anymore.
+
+[code language="js"]
+function stopRecognition() {
+  if (recognition) {
+    recognition.stop();
+    recognition = null;
+  }
+  updateRec();
+}
+
+function switchRecognition() {
+  if (recognition) {
+    stopRecognition();
+  } else {
+    startRecognition();
+  }
+}
+
+function send() {
+  var text = $speechInput.val();
+  $.ajax({
+    type: "POST",
+    url: baseUrl + "query",
+    contentType: "application/json; charset=utf-8",
+    dataType: "json",
+    headers: {
+      "Authorization": "Bearer " + accessToken
+    },
+    data: JSON.stringify({query: text, lang: "en", sessionId: "runbarry"}),
+
+    success: function(data) {
+      prepareResponse(data);
+    },
+    error: function() {
+      respond(messageInternalError);
+    }
+  });
+}
+
+function prepareResponse(val) {
+  var debugJSON = JSON.stringify(val, undefined, 2),
+      spokenResponse = val.result.speech;
+
+  respond(spokenResponse);
+  debugRespond(debugJSON);
+}
+
+function debugRespond(val) {
+  $("#response").text(val);
+}
+
+function respond(val) {
+  if (val == "") {
+    val = messageSorry;
+  }
+
+  if (val !== messageRecording) {
+    var msg = new SpeechSynthesisUtterance();
+    var voices = window.speechSynthesis.getVoices();
+    msg.voiceURI = "native";
+    msg.text = val;
+    msg.lang = "en-US";
+      window.speechSynthesis.speak(msg);
+  }
+
+  $("#spokenResponse").addClass("is-active").find(".spoken-response__text").html(val);
+}
+
+if (val == "") {
+  val = messageSorry;
+}
+
+if (val !== messageRecording) {
+  var msg = new SpeechSynthesisUtterance();
+  msg.voiceURI = "native";
+  msg.text = val;
+  msg.lang = "en-US";
+  window.speechSynthesis.speak(msg);
+  
+  $("#spokenResponse").addClass("is-active").find(".spoken-response__text").html(val);
+  
+  
